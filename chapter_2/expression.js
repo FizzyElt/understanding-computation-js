@@ -1,7 +1,7 @@
 class Num {
+  reducible = false;
   constructor(value) {
     this.value = value;
-    this.reducible = false;
   }
   toString() {
     return String(this.value);
@@ -12,10 +12,10 @@ class Num {
 }
 
 class Add {
+  reducible = true;
   constructor(left, right) {
     this.left = left;
     this.right = right;
-    this.reducible = true;
   }
   toString() {
     return `${this.left} + ${this.right}`;
@@ -36,10 +36,10 @@ class Add {
 }
 
 class Multiply {
+  reducible = true;
   constructor(left, right) {
     this.left = left;
     this.right = right;
-    this.reducible = true;
   }
   toString() {
     return `${this.left} * ${this.right}`;
@@ -59,13 +59,63 @@ class Multiply {
   }
 }
 
-let expression = new Add(
-  new Multiply(new Num(1), new Num(2)),
-  new Multiply(new Num(3), new Num(4))
-);
-console.log(expression.toString());
+class Bool {
+  reducible = false;
+  constructor(value) {
+    this.value = value;
+  }
 
-while (expression.reducible) {
-  expression = expression.reduce();
-  console.log(expression.toString());
+  toString() {
+    return this.value ? 'true' : 'false';
+  }
+  inspect() {
+    return `(${this.constructor.name} ${this.value})`;
+  }
 }
+
+class LessThan {
+  reducible = true;
+  constructor(left, right) {
+    this.left = left;
+    this.right = right;
+  }
+
+  toString() {
+    return `${this.left} < ${this.right}`;
+  }
+
+  reduce() {
+    if (this.left.reducible) {
+      return new LessThan(this.left.reduce(), this.right);
+    }
+    if (this.right.reducible) {
+      return new LessThan(this.left, this.right.reduce());
+    }
+    return new Bool(this.left.value < this.right.value);
+  }
+}
+
+class Machine {
+  constructor(expression) {
+    this.expression = expression;
+  }
+
+  step() {
+    this.expression = this.expression.reduce();
+  }
+
+  run(logFn = console.log) {
+    console.log(this.expression.reducible);
+    while (this.expression.reducible) {
+      logFn(this.expression.toString());
+      this.step();
+    }
+    logFn(this.expression.toString());
+  }
+}
+
+const expression = new LessThan(new Num(5), new Add(new Num(2), new Num(2)));
+
+const machine = new Machine(expression);
+
+machine.run();
