@@ -11,6 +11,23 @@ class Num {
   }
 }
 
+class Variable {
+  reducible = true;
+  constructor(name) {
+    this.name = name;
+  }
+  toString() {
+    return this.name;
+  }
+  inspect() {
+    return `(${this.constructor.name} ${this.name})`;
+  }
+
+  reduce(environment) {
+    return [environment[this.name], environment];
+  }
+}
+
 class Add {
   reducible = true;
   constructor(left, right) {
@@ -24,14 +41,16 @@ class Add {
     return `(${this.constructor.name} ${this.left} ${this.right})`;
   }
 
-  reduce() {
+  reduce(environment) {
     if (this.left.reducible) {
-      return new Add(this.left.reduce(), this.right);
+      const [leftExpression] = this.left.reduce(environment);
+      return [new Add(leftExpression, this.right), environment];
     }
     if (this.right.reducible) {
-      return new Add(this.left, this.right.reduce());
+      const [rightExpression] = this.right.reduce(environment);
+      return [new Add(this.left, rightExpression), environment];
     }
-    return new Num(this.left.value + this.right.value);
+    return [new Num(this.left.value + this.right.value), environment];
   }
 }
 
@@ -48,14 +67,16 @@ class Multiply {
     return `(${this.constructor.name} ${this.left} ${this.right})`;
   }
 
-  reduce() {
+  reduce(environment) {
     if (this.left.reducible) {
-      return new Multiply(this.left.reduce(), this.right);
+      const [leftExpression] = this.left.reduce(environment);
+      return [new Multiply(leftExpression, this.right), environment];
     }
     if (this.right.reducible) {
-      return new Multiply(this.left, this.right.reduce());
+      const [rightExpression] = this.right.reduce(environment);
+      return [new Multiply(this.left, rightExpression), environment];
     }
-    return new Num(this.left.value * this.right.value);
+    return [new Num(this.left.value * this.right.value), environment];
   }
 }
 
@@ -84,38 +105,81 @@ class LessThan {
     return `${this.left} < ${this.right}`;
   }
 
-  reduce() {
+  reduce(environment) {
     if (this.left.reducible) {
-      return new LessThan(this.left.reduce(), this.right);
+      return new LessThan(this.left.reduce(environment), this.right);
     }
     if (this.right.reducible) {
-      return new LessThan(this.left, this.right.reduce());
+      return new LessThan(this.left, this.right.reduce(environment));
     }
     return new Bool(this.left.value < this.right.value);
   }
 }
 
-class Machine {
-  constructor(expression) {
-    this.expression = expression;
+class DoNothing {
+  reducible = false;
+  toString() {
+    return 'do-nothing';
+  }
+  inspect() {
+    return `(${this.constructor.name})`;
   }
 
-  step() {
-    this.expression = this.expression.reduce();
-  }
-
-  run(logFn = console.log) {
-    console.log(this.expression.reducible);
-    while (this.expression.reducible) {
-      logFn(this.expression.toString());
-      this.step();
-    }
-    logFn(this.expression.toString());
+  equals(other_statement) {
+    return other_statement instanceof DoNothing;
   }
 }
 
-const expression = new LessThan(new Num(5), new Add(new Num(2), new Num(2)));
+class Assign {
+  reducible = true;
+  constructor(name, expression) {
+    this.name = name;
+    this.expression = expression;
+  }
 
-const machine = new Machine(expression);
+  toString() {
+    return `${this.name} = ${this.expression}`;
+  }
+
+  inspect() {
+    return `(${this.constructor.name} ${this.name} ${this.expression})`;
+  }
+
+  reduce(environment) {
+    if (this.expression.reducible) {
+      const [rightExpression] = this.expression.reduce(environment);
+      return [new Assign(this.name, rightExpression), environment];
+    }
+
+    return [new DoNothing(), { ...environment, [this.name]: this.expression }];
+  }
+}
+
+class Machine {
+  constructor(statement, environment = {}) {
+    this.statement = statement;
+    this.environment = environment;
+  }
+
+  step() {
+    const [statement, environment] = this.statement.reduce(this.environment);
+    this.statement = statement;
+    this.environment = environment;
+  }
+
+  run(logFn = console.log) {
+    while (this.statement.reducible) {
+      logFn(this.statement.toString(), this.environment);
+      this.step();
+    }
+    logFn(this.statement.toString(), this.environment);
+  }
+}
+
+const statement = new Assign('x', new Add(new Num(3), new Num(4)));
+
+const environment = { x: new Num(2) };
+
+const machine = new Machine(statement, environment);
 
 machine.run();
