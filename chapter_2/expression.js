@@ -43,12 +43,12 @@ class Add {
 
   reduce(environment) {
     if (this.left.reducible) {
-      const [leftExpression] = this.left.reduce(environment);
-      return [new Add(leftExpression, this.right), environment];
+      const [leftExpression, newEnvironment] = this.left.reduce(environment);
+      return [new Add(leftExpression, this.right), newEnvironment];
     }
     if (this.right.reducible) {
-      const [rightExpression] = this.right.reduce(environment);
-      return [new Add(this.left, rightExpression), environment];
+      const [rightExpression, newEnvironment] = this.right.reduce(environment);
+      return [new Add(this.left, rightExpression), newEnvironment];
     }
     return [new Num(this.left.value + this.right.value), environment];
   }
@@ -147,11 +147,71 @@ class Assign {
 
   reduce(environment) {
     if (this.expression.reducible) {
-      const [rightExpression] = this.expression.reduce(environment);
-      return [new Assign(this.name, rightExpression), environment];
+      const [rightExpression, newEnvironment] = this.expression.reduce(environment);
+      return [new Assign(this.name, rightExpression), newEnvironment];
     }
 
     return [new DoNothing(), { ...environment, [this.name]: this.expression }];
+  }
+}
+
+class If {
+  reducible = true;
+  constructor(condition, consequence, alternative) {
+    this.condition = condition;
+    this.consequence = consequence;
+    this.alternative = alternative;
+  }
+
+  toString() {
+    return `if ${this.condition} { ${this.consequence} } else { ${this.alternative} }`;
+  }
+
+  inspect() {
+    return `(${this.constructor.name} ${this.condition} ${this.consequence} ${this.alternative})`;
+  }
+
+  reduce(environment) {
+    if (this.condition.reducible) {
+      const [statement, newEnvironment] = this.condition.reduce(environment);
+      return [new If(statement, this.consequence, this.alternative), newEnvironment];
+    }
+
+    if (this.condition instanceof Bool && this.condition.value) {
+      return [this.consequence, environment];
+    }
+
+    if (this.condition instanceof Bool && !this.condition.value) {
+      return [this.alternative, environment];
+    }
+
+    throw new Error(`Invalid condition: ${this.condition}`);
+  }
+}
+
+class Sequence {
+  reducible = true;
+  constructor(first, second) {
+    this.first = first;
+    this.second = second;
+  }
+
+  toString() {
+    return `${this.first}; ${this.second}`;
+  }
+
+  inspect() {
+    return `(${this.constructor.name} ${this.first} ${this.second})`;
+  }
+
+  reduce(environment) {
+    if (this.first instanceof DoNothing) {
+      return [this.second, environment];
+    }
+
+    const [firstStatement, newEnvironment] = this.first.reduce(environment);
+
+    return [new Sequence(firstStatement, this.second), newEnvironment];
   }
 }
 
@@ -176,9 +236,9 @@ class Machine {
   }
 }
 
-const statement = new Assign('x', new Add(new Num(3), new Num(4)));
+const statement = new If(new Variable('x'), new Assign('y', new Num(1)), new DoNothing());
 
-const environment = { x: new Num(2) };
+const environment = { x: new Bool(false) };
 
 const machine = new Machine(statement, environment);
 
