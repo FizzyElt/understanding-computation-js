@@ -11,6 +11,10 @@ class Num {
   }
 }
 
+function num(value) {
+  return new Num(value);
+}
+
 class Variable {
   reducible = true;
   constructor(name) {
@@ -26,6 +30,10 @@ class Variable {
   reduce(environment) {
     return [environment[this.name], environment];
   }
+}
+
+function variable(name) {
+  return new Variable(name);
 }
 
 class Add {
@@ -54,6 +62,10 @@ class Add {
   }
 }
 
+function add(left, right) {
+  return new Add(left, right);
+}
+
 class Multiply {
   reducible = true;
   constructor(left, right) {
@@ -80,6 +92,10 @@ class Multiply {
   }
 }
 
+function mul(left, right) {
+  return new Multiply(left, right);
+}
+
 class Bool {
   reducible = false;
   constructor(value) {
@@ -92,6 +108,10 @@ class Bool {
   inspect() {
     return `(${this.constructor.name} ${this.value})`;
   }
+}
+
+function bool(value) {
+  return new Bool(value);
 }
 
 class LessThan {
@@ -107,13 +127,19 @@ class LessThan {
 
   reduce(environment) {
     if (this.left.reducible) {
-      return new LessThan(this.left.reduce(environment), this.right);
+      const [leftExpression, newEnvironment] = this.left.reduce(environment);
+      return [new LessThan(leftExpression, this.right), newEnvironment];
     }
     if (this.right.reducible) {
-      return new LessThan(this.left, this.right.reduce(environment));
+      const [rightExpression, newEnvironment] = this.right.reduce(environment);
+      return [new LessThan(this.left, rightExpression), newEnvironment];
     }
-    return new Bool(this.left.value < this.right.value);
+    return [new Bool(this.left.value < this.right.value), environment];
   }
+}
+
+function lessThan(left, right) {
+  return new LessThan(left, right);
 }
 
 class DoNothing {
@@ -128,6 +154,10 @@ class DoNothing {
   equals(other_statement) {
     return other_statement instanceof DoNothing;
   }
+}
+
+function doNothing() {
+  return new DoNothing();
 }
 
 class Assign {
@@ -153,6 +183,10 @@ class Assign {
 
     return [new DoNothing(), { ...environment, [this.name]: this.expression }];
   }
+}
+
+function assign(name, expression) {
+  return new Assign(name, expression);
 }
 
 class If {
@@ -189,6 +223,10 @@ class If {
   }
 }
 
+function ifStatement(condition, consequence, alternative) {
+  return new If(condition, consequence, alternative);
+}
+
 class Sequence {
   reducible = true;
   constructor(first, second) {
@@ -215,6 +253,34 @@ class Sequence {
   }
 }
 
+function sequence(first, second) {
+  return new Sequence(first, second);
+}
+
+class While {
+  reducible = true;
+  constructor(condition, body) {
+    this.condition = condition;
+    this.body = body;
+  }
+
+  toString() {
+    return `while (${this.condition}) { ${this.body} }`;
+  }
+
+  inspect() {
+    return `(${this.constructor.name} ${this.condition} ${this.body})`;
+  }
+
+  reduce(environment) {
+    return [new If(this.condition, new Sequence(this.body, this), new DoNothing()), environment];
+  }
+}
+
+function whileLoop(condition, body) {
+  return new While(condition, body);
+}
+
 class Machine {
   constructor(statement, environment = {}) {
     this.statement = statement;
@@ -236,10 +302,13 @@ class Machine {
   }
 }
 
-const statement = new If(new Variable('x'), new Assign('y', new Num(1)), new DoNothing());
+function createMachine(statement, environment = {}) {
+  return new Machine(statement, environment);
+}
 
-const environment = { x: new Bool(false) };
-
-const machine = new Machine(statement, environment);
+const machine = createMachine(
+  whileLoop(lessThan(variable('x'), num(5)), assign('x', mul(variable('x'), num(3)))),
+  { x: num(1) }
+);
 
 machine.run();
